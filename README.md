@@ -1,2 +1,0 @@
-# Bond
-AI rp

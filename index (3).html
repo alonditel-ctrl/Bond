@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#7c5cff"><meta name="mobile-web-app-capable" content="yes">
+<title>Bond</title>
+<style>
+:root{--bg:#f6f4fb;--cd:#fff;--tx:#1d1a2b;--mu:#6d6985;--ac:#7c5cff;--bd:#e2deef;--ai:#fff;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#14121d;--cd:#1f1c2e;--tx:#eeeaf8;--mu:#9a95b4;--bd:#322d4a;--ai:#252136;color-scheme:dark}}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,sans-serif}
+#app{height:100%;display:flex;flex-direction:column;max-width:640px;margin:auto}
+header{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--bd)}
+h1{font-size:19px;margin:0;flex:1}h2{font-size:15px;color:var(--mu);margin:22px 0 8px}
+main{flex:1;overflow:auto;padding:14px}
+input,textarea,select{width:100%;box-sizing:border-box;margin:6px 0;padding:11px;border:1px solid var(--bd);border-radius:12px;background:var(--cd);color:var(--tx);font:inherit}
+.btn{display:inline-block;padding:11px 16px;border:0;border-radius:12px;background:var(--ac);color:#fff;font:inherit;font-weight:600;cursor:pointer;margin:6px 0}
+.btn.big{width:100%}.btn.ghost{background:transparent;color:var(--ac);border:1px solid var(--ac)}.btn:disabled{opacity:.5}
+.ic{background:none;border:0;font-size:22px;color:var(--tx);cursor:pointer;padding:4px 8px}
+.row{display:flex;align-items:center;gap:10px;padding:12px;background:var(--cd);border:1px solid var(--bd);border-radius:14px;margin:8px 0;cursor:pointer}
+.grow{flex:1;min-width:0}.mu{color:var(--mu)}.sn{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.av{width:44px;height:44px;border-radius:50%;object-fit:cover}.av.big{width:96px;height:96px;display:block;margin:6px 0}.av.sm{width:32px;height:32px}
+label input[type=file]{display:none}
+.msgs{display:flex;flex-direction:column;gap:8px}
+.b{max-width:85%;padding:10px 13px;border-radius:16px;white-space:pre-wrap;overflow-wrap:anywhere}
+.b.u{align-self:flex-end;background:var(--ac);color:#fff;border-bottom-right-radius:4px}
+.b.a{align-self:flex-start;background:var(--ai);border:1px solid var(--bd);border-bottom-left-radius:4px}
+.b em{opacity:.85}
+.bar{display:flex;align-items:flex-end;gap:6px;padding:8px 10px;border-top:1px solid var(--bd)}
+.bar textarea{margin:0;max-height:120px;resize:none}.send{margin:0;padding:10px 14px}
+</style></head><body><div id="app"></div>
+<script>
+const $=s=>document.querySelector(s),app=$("#app"),K="bond1",DAY=864e5,TTL=5,DM="openai/gpt-oss-120b",DV="qwen/qwen3.6-27b";
+let S;try{S=JSON.parse(localStorage.getItem(K))}catch(e){}
+S=S||{p:[],c:[]};S.k=S.k||"";S.m=S.m||DM;S.vm=S.vm||DV;if(/llama-3\.3-70b|llama-3\.1-8b/.test(S.m))S.m=DM;if(/llama-4|qwen3-32b/.test(S.vm))S.vm=DV;
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){alert("Storage is full. Delete an old chat or use smaller images.")}};
+const uid=()=>Math.random().toString(36).slice(2,9);
+let V={n:"home"};
+
+async function llm(m,o={}){
+if(!S.k)throw{code:"nokey"};
+const md=o.vision?S.vm:S.m;let r;
+try{r=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+S.k},body:JSON.stringify({model:md,messages:m,temperature:o.json?.3:.9,max_tokens:o.max||(o.json?1500:1000),...(/gpt-oss/.test(md)?{reasoning_effort:"low"}:{}),...(o.json?{response_format:{type:"json_object"}}:{})})})}catch(e){throw{code:"net"}}
+if(r.status==404&&!o.retry&&await fixModel(o.vision))return llm(m,{...o,retry:1});
+if(r.status==429)throw{code:"rate"};if(r.status==401)throw{code:"badkey"};
+if(!r.ok){let d="";try{d=(await r.json()).error.message}catch(e){}throw{code:"err",s:r.status,d}}
+let t=(await r.json()).choices[0].message.content||"";t=t.replace(/<think>[\s\S]*?<\/think>/g,"").trim();
+if(!o.json)return t;try{return JSON.parse(t)}catch(e){throw{code:"err"}}}
+async function fixModel(v){try{const r=await fetch("https://api.groq.com/openai/v1/models",{headers:{Authorization:"Bearer "+S.k}});if(!r.ok)return false;
+const ids=(await r.json()).data.map(x=>x.id).filter(i=>!/whisper|guard|tts|orpheus|safeguard|compound/.test(i));
+const n=v?ids.find(i=>/qwen3\.\d+-27b|vision/.test(i)):["openai/gpt-oss-120b","openai/gpt-oss-20b"].find(i=>ids.includes(i))||ids[0];
+if(!n||n==(v?S.vm:S.m))return false;if(v)S.vm=n;else S.m=n;save();return true}catch(e){return false}}
+const err=e=>({nokey:"Add your free API key in ⚙ settings first.",badkey:"Your API key was rejected. Check it in ⚙ settings.",rate:"Slow down a little and try again in a moment.",net:"No connection. Check your internet and try again."}[e&&e.code]||"Something went wrong"+(e&&e.s?" (error "+e.s+(e.d?": "+e.d.slice(0,140):"")+")":"")+". Try again.");
+async function wsearch(q){for(const t of [q+" character",q]){const j=await(await fetch("https://en.wikipedia.org/w/api.php?action=query&list=search&srlimit=5&format=json&origin=*&srsearch="+encodeURIComponent(t))).json();
+const L=j.query.search.map(x=>({name:x.title,wiki:x.title,source:"Wikipedia",blurb:new DOMParser().parseFromString(x.snippet,"text/html").body.textContent}));if(L.length)return L}return[]}
+async function wpage(t){const j=await(await fetch("https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exlimit=1&format=json&origin=*&titles="+encodeURIComponent(t))).json();return(Object.values(j.query.pages)[0].extract||"").slice(0,4000)}
+
+function h(t,a,...k){const e=document.createElement(t);for(const x in a||{}){const v=a[x];if(x=="class")e.className=v;else if(x.slice(0,2)=="on")e[x]=v;else if(x=="value")e.value=v;else e.setAttribute(x,v)}for(const c of k.flat())if(c!=null)e.append(c);return e}
+const go=(n,x)=>{V={n,...x};render()};
+function render(){app.replaceChildren();({home,persona,newchat,chat,settings})[V.n]()}
+function hd(t,back,img){return h("header",{},back?h("button",{class:"ic",onclick:back},"‹"):null,img?h("img",{class:"av sm",src:img}):null,h("h1",{},t))}
+function fmt(t,p){t.split(/(\*[^*]+\*)/).forEach(s=>{if(/^\*[^*]+\*$/.test(s)){const e=h("em");e.textContent=s.slice(1,-1);p.append(e)}else p.append(s)})}
+function shrink(f){return new Promise(r=>{const i=new Image();i.onload=()=>{const s=Math.min(1,384/Math.max(i.width,i.height)),c=document.createElement("canvas");c.width=i.width*s;c.height=i.height*s;c.getContext("2d").drawImage(i,0,0,c.width,c.height);r(c.toDataURL("image/jpeg",.7))};i.src=URL.createObjectURL(f)})}
+async function describe(u){try{return await llm([{role:"user",content:[{type:"text",text:"In 2-3 sentences, describe the physical appearance of the person or character in this image: hair, eyes, build, clothing, style. Plain text only."},{type:"image_url",image_url:{url:u}}]}],{vision:1})}catch(e){return""}}
+function imgPick(cb,cur){const pv=h("img",{class:"av big",src:cur||""});if(!cur)pv.style.display="none";const f=h("input",{type:"file",accept:"image/*",onchange:async()=>{const x=f.files[0];if(!x)return;const u=await shrink(x);pv.src=u;pv.style.display="block";cb(u)}});return h("div",{},pv,h("label",{class:"btn ghost"},"📷 Upload image",f))}
+function prune(){const n=S.c.length;S.c=S.c.filter(c=>Date.now()-c.ts<TTL*DAY);if(S.c.length<n)save()}
+
+function home(){
+prune();const hh=hd("Bond");hh.append(h("button",{class:"ic",onclick:()=>go("settings")},"⚙"));app.append(hh);
+const m=h("main");
+m.append(h("button",{class:"btn big",onclick:()=>go("newchat")},"+ New chat"));if(!S.k)m.append(h("p",{class:"mu"},"First, tap ⚙ and add your free API key."));
+m.append(h("h2",{},"Chat history"));
+if(!S.c.length)m.append(h("p",{class:"mu"},"No chats yet."));
+[...S.c].sort((a,b)=>b.ts-a.ts).forEach(c=>{const p=S.p.find(x=>x.id==c.pid),l=c.m[c.m.length-1];
+m.append(h("div",{class:"row",onclick:()=>go("chat",{id:c.id})},c.img?h("img",{class:"av",src:c.img}):null,h("div",{class:"grow"},h("b",{},c.char+" · "+(p?p.name:"?")),h("div",{class:"mu sn"},(l?l.t.replace(/\*/g,"").slice(0,50):"")+" · "+Math.max(1,Math.ceil(TTL-(Date.now()-c.ts)/DAY))+"d left")),h("button",{class:"ic",onclick:e=>{e.stopPropagation();if(confirm("Delete this chat?")){S.c=S.c.filter(x=>x!=c);save();render()}}},"🗑")))});
+m.append(h("h2",{},"My personas ("+S.p.length+"/2)"));
+S.p.forEach(p=>m.append(h("div",{class:"row",onclick:()=>go("persona",{id:p.id})},p.img?h("img",{class:"av",src:p.img}):null,h("div",{class:"grow"},h("b",{},p.name+(p.id==S.dp?" ★ default":"")),h("div",{class:"mu sn"},p.age+" · "+(p.looks||"").slice(0,50))))));
+if(S.p.length<2)m.append(h("button",{class:"btn ghost",onclick:()=>go("persona",{id:null})},"+ Add persona"));
+m.append(h("p",{class:"mu sn"},"Fictional roleplay with an AI. Characters are not real. 18+ only. v5"));
+app.append(m)}
+
+function settings(){
+app.append(hd("Settings",()=>go("home")));
+const k=h("input",{type:"password",placeholder:"Groq API key (starts with gsk_)",value:S.k}),m=h("input",{value:S.m}),vm=h("input",{value:S.vm}),tst=h("p",{class:"mu"});
+app.append(h("main",{},h("p",{},"This app talks to Groq, which has a free tier. Get a free key at console.groq.com/keys and paste it here. It is stored only on this phone."),k,h("p",{class:"mu sn"},"Chat model"),m,h("p",{class:"mu sn"},"Image model"),vm,
+h("button",{class:"btn big ghost",onclick:async()=>{S.k=k.value.trim();S.m=m.value.trim()||DM;tst.textContent="Testing…";try{tst.textContent="Works: "+await llm([{role:"user",content:"Say hi in 3 words."}],{max:20})}catch(e){tst.textContent=err(e)}}},"Test connection"),tst,
+h("button",{class:"btn big",onclick:()=>{S.k=k.value.trim();S.m=m.value.trim()||DM;S.vm=vm.value.trim()||DV;save();go("home")}},"Save")))}
+
+function persona(){
+const p=S.p.find(x=>x.id==V.id)||{id:uid(),name:"",age:"",looks:"",secret:"",img:""},isNew=!S.p.includes(p);
+if(isNew&&S.p.length>=2){go("home");return}
+app.append(hd(isNew?"New persona":"Edit persona",()=>go("home")));
+const n=h("input",{placeholder:"Your name",value:p.name}),a=h("input",{type:"number",min:18,placeholder:"Age (18+)",value:p.age}),l=h("textarea",{rows:3,placeholder:"Your looks (hair, eyes, style…)"}),s=h("textarea",{rows:2,placeholder:"A secret or something special (optional)"}),st=h("p",{class:"mu sn"});
+l.value=p.looks;s.value=p.secret;
+const ip=imgPick(async u=>{p.img=u;st.textContent="Reading your photo…";const d=await describe(u);if(d)l.value=(l.value?l.value+"\n":"")+d;st.textContent=d?"Photo described. Edit if needed.":"Photo saved."},p.img);
+app.append(h("main",{},n,a,l,s,ip,st,
+h("button",{class:"btn big",onclick:()=>{const nm=n.value.trim(),ag=+a.value;if(!nm)return alert("Add a name.");if(!(ag>=18))return alert("Personas must be 18 or older.");Object.assign(p,{name:nm,age:ag,looks:l.value.trim(),secret:s.value.trim()});if(isNew)S.p.push(p);if(!S.dp)S.dp=p.id;save();go("home")}},"Save"),
+isNew?null:h("button",{class:"btn big ghost",onclick:()=>{S.dp=p.id;save();go("home")}},"★ Make default"),
+isNew?null:h("button",{class:"btn big ghost",onclick:()=>{if(confirm("Delete this persona and its chats?")){S.c=S.c.filter(x=>x.pid!=p.id);S.p=S.p.filter(x=>x!=p);if(S.dp==p.id)S.dp=(S.p[0]||{}).id;save();go("home")}}},"Delete persona")))}
+
+function newchat(){
+app.append(hd("New chat",()=>go("home")));
+if(!S.p.length){app.append(h("main",{},h("p",{},"Create a persona first. For every chat you pick from your saved personas."),h("button",{class:"btn big",onclick:()=>go("persona",{id:null})},"+ Add persona")));return}
+const ps=h("select",{},S.p.map(p=>h("option",{value:p.id},p.name)));ps.value=S.p.some(p=>p.id==S.dp)?S.dp:S.p[0].id;
+const cn=h("input",{placeholder:"Character name (fictional or real)"}),st=h("p",{class:"mu sn"}),lst=h("div"),
+card=h("textarea",{rows:8,placeholder:"The character card (looks, personality…) appears here after you pick a character. You can edit it."}),
+sit=h("textarea",{rows:3,placeholder:"Starting scenario (e.g. We meet at a rainy bus stop…)"});
+let cimg="",il="",orig="";
+const ci=imgPick(async u=>{cimg=u;st.textContent="Reading image…";const d=await describe(u);if(d){il=d;card.value+=(card.value?"\n":"")+"Looks (from image): "+d}st.textContent=""});
+const pick=async x=>{st.textContent="Reading about "+x.name+"…";lst.replaceChildren();
+let src="";try{src=await wpage(x.wiki||(await wsearch(x.name+" "+(x.source||"")))[0].name)}catch(e){}
+try{const r=await llm([{role:"user",content:"Write a character card for \""+x.name+"\""+(x.source&&x.source!="Wikipedia"?" from \""+x.source+"\"":"")+". Use the source text below plus everything you know. Reply in plain text with exactly these five labeled lines, each 1-3 sentences, no markdown:\nLooks: (hair, eyes, build, usual outfit)\nPersonality:\nSpeech style:\nBackground:\nRelationships:\nBe specific and accurate. For real people use only their public persona.\nSOURCE TEXT:\n"+(src||"none")}],{max:600});
+if(!r.trim())throw{code:"err"};
+orig="";cn.value=x.name;card.value=r.replace(/\*\*/g,"").trim()+(il?"\nLooks (from image): "+il:"");st.textContent="Done. Edit anything, then add a scenario."}
+catch(e){cn.value=x.name;if(src)card.value="Background (from Wikipedia): "+src.slice(0,800).replace(/\n+/g," ");st.textContent=err(e)+(src?" Filled from Wikipedia instead.":"")}};
+const au=h("textarea",{rows:2,placeholder:"Your AU, e.g. ATLA x College AU (optional)"}),
+ab=h("button",{class:"btn ghost",onclick:async()=>{
+const u=au.value.trim();if(!u)return alert("Write your AU first, e.g. ATLA x College AU.");
+if(!card.value.trim())return alert("Pick a character first so there is a card to adapt.");
+if(!orig)orig=card.value;ab.disabled=true;st.textContent="Adapting to your AU…";
+try{const r=await llm([{role:"user",content:"Rewrite this character card for an alternate universe: \""+u+"\".\nKeep the character's core personality, values, speech style and recognizable looks. Adapt background, abilities, job or status, and relationships to fit the AU (for example, someone from a world with magic has no magic in a modern AU, but keeps their temperament and skills in a fitting everyday form). Keep exactly these five labeled lines: Looks, Personality, Speech style, Background, Relationships. Plain text, no markdown.\nCARD:\n"+orig}],{max:700});
+if(!r.trim())throw{code:"err"};card.value=r.replace(/\*\*/g,"").trim();st.textContent="AU applied. Edit anything, or change the AU and tap again."}
+catch(e){st.textContent=err(e)}ab.disabled=false}},"✨ Apply AU");
+const rs=h("button",{class:"btn",onclick:async()=>{
+const nm=cn.value.trim();if(!nm)return alert("Enter a character name first.");
+rs.disabled=true;st.textContent="Searching…";lst.replaceChildren();
+const [a,b]=await Promise.allSettled([llm([{role:"user",content:"List up to 4 distinct characters (fictional, or real public figures) matching the name \""+nm+"\" across all media: books, shows, films, games, anime, comics. Return JSON {\"characters\":[{\"name\":full character name,\"source\":the show/book/game it is from,\"blurb\":one short line about who they are}]}. Most famous first. If nothing matches, return {\"characters\":[]}."}],{json:true}),wsearch(nm)]);
+rs.disabled=false;
+const L=[...((a.status=="fulfilled"&&a.value.characters)||[]).slice(0,4),...(b.status=="fulfilled"?b.value:[]).slice(0,3)];
+if(!L.length){st.textContent=(a.status=="rejected"?err(a.reason):"Nothing found. Try another spelling, or write the card yourself.")+(b.status=="rejected"?" Wikipedia search failed too.":"");return}
+st.textContent="Tap the one you mean:"+(a.status=="rejected"?" (AI suggestions unavailable: "+err(a.reason)+")":"");
+L.forEach(x=>lst.append(h("div",{class:"row",onclick:()=>pick(x)},h("div",{class:"grow"},h("b",{},x.name),h("div",{class:"mu sn"},(x.source||"")+" · "+(x.blurb||""))))))}},"🔎 Find characters");
+app.append(h("main",{},h("b",{},"Play as"),ps,h("h2",{},"Character"),cn,rs,st,lst,card,h("h2",{},"Alternate universe (optional)"),au,ab,ci,h("h2",{},"Scenario"),sit,
+h("button",{class:"btn big",onclick:()=>{const ch=cn.value.trim();if(!ch)return alert("Enter a character name.");S.dp=ps.value;
+const c={id:uid(),pid:ps.value,char:ch,card:card.value.trim()||"Use your own knowledge of this character.",img:cimg,au:au.value.trim(),sit:sit.value.trim(),m:[],mem:[],sum:"",at:0,ts:Date.now()};
+S.c.push(c);save();go("chat",{id:c.id,open:1})}},"Start chat")))}
+
+function msgs(c,p,gap,first){
+const sys="You are roleplaying as "+c.char+" in an immersive, realistic relationship/situation simulation on a phone chat app. Stay in character; never mention being an AI unless the user clearly steps out of the story.\nCHARACTER CARD:\n"+c.card+(c.au?"\nALTERNATE UNIVERSE: "+c.au+". Keep the setting consistent with it, and adapt the character to it wherever the card does not already.":"")+"\nUSER PERSONA: "+p.name+", age "+p.age+". Looks: "+(p.looks||"unspecified")+". Secret/special trait (the character does NOT know it unless the user reveals it in the story): "+(p.secret||"none")+".\nSITUATION: "+(c.sit||"Open-ended; begin naturally.")+"\nRULES: Text between *asterisks* is a physical action or event (by the user when in their message). Write your own actions the same way, in *asterisks*, and react naturally to the user's actions. Reply in 1-4 short paragraphs in a natural, immersive chat style, with no out-of-character notes. Keep emotions and continuity consistent. Never speak or act for the user. Keep content non-explicit; if a scene turns sexual, cut away. For real people, stay respectful and use only their public persona.\nTIME: "+gap+"\nLONG-TERM MEMORIES:\n"+(c.mem.join("\n")||"none yet")+"\nSTORY SO FAR: "+(c.sum||"just beginning");
+const o=[{role:"system",content:sys}];
+for(const x of c.m.slice(-16).map(x=>({role:x.r=="u"?"user":"assistant",content:x.t}))){const l=o[o.length-1];if(l.role==x.role)l.content+="\n"+x.content;else o.push(x)}
+if(first)o.push({role:"user",content:"(Begin the scene with a short in-character opening that fits the situation.)"});
+return o}
+
+async function reply(c,p,box,first){
+const b=bub(box,"a","…"),hrs=(Date.now()-c.ts)/36e5,d=Math.floor(hrs/24),gap=first?"The scene is just starting.":hrs<2?"The conversation is continuous.":hrs<24?"A few hours of real life have passed since you last spoke. Acknowledge it naturally if relevant.":d+" day(s) of real life have passed since you last spoke. Pick up naturally, remembering what you shared.";
+try{const t=await llm(msgs(c,p,gap,first));b.replaceChildren();fmt(t,b);c.m.push({r:"a",t});c.ts=Date.now();save();b.parentNode.scrollTop=b.parentNode.scrollHeight}
+catch(e){b.textContent=err(e)}}
+
+function bub(box,r,t){const b=h("div",{class:"b "+r});if(t=="…")b.textContent=t;else fmt(t,b);box.append(b);box.scrollTop=box.scrollHeight;return b}
+
+async function summ(c){
+if(c.m.length-c.at<4||!S.k)return;
+const p=S.p.find(x=>x.id==c.pid);if(!p)return;
+const nw=c.m.slice(c.at).map(x=>(x.r=="u"?p.name:c.char)+": "+x.t).join("\n"),n=c.m.length;
+try{const r=await llm([{role:"user",content:"You maintain the long-term memory of "+c.char+", a roleplay character talking with "+p.name+".\nExisting memories:\n"+(c.mem.join("\n")||"none")+"\nStory summary:\n"+(c.sum||"none")+"\nNew messages:\n"+nw+"\nReturn JSON {\"facts\":[short NEW memories worth keeping from "+c.char+"'s point of view: promises, feelings, secrets learned, events, preferences, nicknames],\"summary\":\"updated story summary, max 150 words\"}"}],{json:true});
+c.mem=[...c.mem,...(r.facts||[]).map(String)].slice(-60);c.sum=String(r.summary||c.sum);c.at=n;save()}catch(e){}}
+
+function chat(){
+const c=S.c.find(x=>x.id==V.id),p=c&&S.p.find(x=>x.id==c.pid);
+if(!c||!p){go("home");return}
+app.append(hd(c.char,()=>{summ(c);go("home")},c.img));
+const box=h("main",{class:"msgs"}),ta=h("textarea",{rows:1,placeholder:"Message… use *actions*"});
+let busy=false;
+const send=async()=>{const t=ta.value.trim();if(!t||busy)return;busy=true;ta.value="";c.m.push({r:"u",t});save();bub(box,"u",t);await reply(c,p,box);busy=false;if(c.m.length-c.at>=6)summ(c)};
+app.append(box,h("div",{class:"bar"},h("button",{class:"ic",onclick:()=>{ta.setRangeText("**",ta.selectionStart,ta.selectionEnd,"end");ta.selectionStart=ta.selectionEnd=ta.selectionStart-1;ta.focus()}},"✱"),ta,h("button",{class:"btn send",onclick:send},"➤")));
+c.m.forEach(x=>bub(box,x.r,x.t));
+if(V.open&&!c.m.length){V.open=0;busy=true;reply(c,p,box,true).then(()=>busy=false)}}
+prune();render();
+</script></body></html>
